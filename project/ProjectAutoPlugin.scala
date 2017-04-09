@@ -29,7 +29,7 @@ object ProjectAutoPlugin extends AutoPlugin {
 
     licenses += ("Apache-2.0", url("http://opensource.org/licenses/apache2.0.php")),
 
-    scalaVersion := "2.11.8",
+    scalaVersion := "2.12.1",
 
     crossScalaVersions := Seq("2.11.8", "2.12.1"),
 
@@ -76,9 +76,9 @@ object ProjectAutoPlugin extends AutoPlugin {
    libraryDependencies += "com.typesafe.slick" %% "slick" % SlickVersion,
    libraryDependencies += "com.typesafe.slick" %% "slick-hikaricp" % SlickVersion,
    libraryDependencies += "org.postgresql" % "postgresql" % "9.4.1212" % Test,
-   libraryDependencies += "com.h2database" % "h2" % "1.4.193" % Test,
-   libraryDependencies += "mysql" % "mysql-connector-java" % "6.0.5" % Test,
-   libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.2.1" % Test,
+   libraryDependencies += "com.h2database" % "h2" % "1.4.194" % Test,
+   libraryDependencies += "mysql" % "mysql-connector-java" % "6.0.6" % Test,
+   libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.2.3" % Test,
    libraryDependencies += "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion % Test,
    libraryDependencies += "com.typesafe.akka" %% "akka-persistence-tck" % AkkaVersion % Test,
    libraryDependencies += "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,

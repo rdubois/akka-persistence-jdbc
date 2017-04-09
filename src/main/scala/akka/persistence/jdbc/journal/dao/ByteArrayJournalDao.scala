@@ -19,6 +19,7 @@ package journal.dao
 
 import akka.NotUsed
 import akka.persistence.jdbc.config.JournalConfig
+import akka.persistence.jdbc.journal.ordering.OrderingService
 import akka.persistence.jdbc.serialization.FlowPersistentReprSerializer
 import akka.persistence.{AtomicWrite, PersistentRepr}
 import akka.serialization.Serialization
@@ -40,6 +41,7 @@ trait BaseByteArrayJournalDao extends JournalDao {
   val profile: JdbcProfile
   val queries: JournalQueries
   val serializer: FlowPersistentReprSerializer[JournalRow]
+  val orderingService: OrderingService
   implicit val ec: ExecutionContext
 
   import profile.api._
@@ -50,9 +52,23 @@ trait BaseByteArrayJournalDao extends JournalDao {
       case Failure(t)      => Future.successful(Failure(t))
     }
 
-  private def writeJournalRows(xs: Seq[JournalRow]): Future[Unit] = for {
-    _ <- db.run(queries.writeJournalRows(xs))
-  } yield ()
+  override def highestOrdering(): Future[Long] = for {
+    maybeHighest <- db.run(queries.highestOrdering.result)
+  } yield maybeHighest.getOrElse(0L)
+
+  private def writeJournalRows(xs: Seq[JournalRow]): Future[Unit] = {
+    def setOrdering(xs: Seq[Long], ys: Seq[JournalRow]): Seq[JournalRow] = {
+      xs.zip(ys).map {
+        case (ordering, row) => row.copy(ordering = ordering)
+      }
+    }
+
+    for {
+      br <- orderingService.getBatch(xs.size)
+      ys = setOrdering(br.xs, xs)
+      _ <- db.run(queries.writeJournalRows(ys))
+    } yield ()
+  }
 
   override def writeFlow: Flow[AtomicWrite, Try[Unit], NotUsed] =
     Flow[AtomicWrite]
@@ -94,7 +110,7 @@ trait H2JournalDao extends JournalDao {
   }
 }
 
-class ByteArrayJournalDao(val db: Database, val profile: JdbcProfile, journalConfig: JournalConfig, serialization: Serialization)(implicit val ec: ExecutionContext, val mat: Materializer) extends BaseByteArrayJournalDao with H2JournalDao {
+class ByteArrayJournalDao(val db: Database, val profile: JdbcProfile, journalConfig: JournalConfig, serialization: Serialization, val orderingService: OrderingService)(implicit val ec: ExecutionContext, val mat: Materializer) extends BaseByteArrayJournalDao with H2JournalDao {
   val queries = new JournalQueries(profile, journalConfig.journalTableConfiguration)
   val serializer = new ByteArrayJournalSerializer(serialization, journalConfig.pluginConfig.tagSeparator)
 }

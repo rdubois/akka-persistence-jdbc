@@ -44,4 +44,9 @@ trait JournalDao {
    * Writes serialized messages
    */
   def writeFlow: Flow[AtomicWrite, Try[Unit], NotUsed]
+
+  /**
+   * Returns the highest ordering
+   */
+  def highestOrdering(): Future[Long]
 }

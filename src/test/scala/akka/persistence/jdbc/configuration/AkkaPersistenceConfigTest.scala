@@ -28,6 +28,8 @@ class AkkaPersistenceConfigTest extends FlatSpec with Matchers {
       |jdbc-journal {
       |  class = "akka.persistence.jdbc.journal.JdbcAsyncWriteJournal"
       |
+      |  ordering.timeout = "25s"
+      |
       |  tables {
       |    journal {
       |      tableName = "journal"
@@ -223,6 +225,7 @@ class AkkaPersistenceConfigTest extends FlatSpec with Matchers {
 
     cfg.pluginConfig.dao shouldBe "akka.persistence.jdbc.dao.bytea.journal.ByteArrayJournalDao"
     cfg.pluginConfig.tagSeparator shouldBe ","
+    cfg.pluginConfig.orderingTimeout shouldBe 60.seconds
 
     cfg.journalTableConfiguration.tableName shouldBe "journal"
     cfg.journalTableConfiguration.schemaName shouldBe None
@@ -282,6 +285,7 @@ class AkkaPersistenceConfigTest extends FlatSpec with Matchers {
 
     cfg.pluginConfig.dao shouldBe "akka.persistence.jdbc.dao.bytea.journal.ByteArrayJournalDao"
     cfg.pluginConfig.tagSeparator shouldBe ","
+    cfg.pluginConfig.orderingTimeout shouldBe 25.seconds
 
     cfg.journalTableConfiguration.tableName shouldBe "journal"
     cfg.journalTableConfiguration.schemaName shouldBe None

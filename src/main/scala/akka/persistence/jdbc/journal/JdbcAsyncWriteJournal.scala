@@ -16,9 +16,13 @@
 
 package akka.persistence.jdbc.journal
 
-import akka.actor.{ActorSystem, ExtendedActorSystem}
+import akka.actor.{ActorRef, ActorSystem, ExtendedActorSystem, Stash}
+import akka.event.LoggingReceive
+import akka.pattern.pipe
 import akka.persistence.jdbc.config.JournalConfig
+import akka.persistence.jdbc.journal.JdbcAsyncWriteJournal.SetHighestOrdering
 import akka.persistence.jdbc.journal.dao.JournalDao
+import akka.persistence.jdbc.journal.ordering.{OrderingActor, OrderingService}
 import akka.persistence.jdbc.util.{SlickDatabase, SlickDriver}
 import akka.persistence.journal.AsyncWriteJournal
 import akka.persistence.{AtomicWrite, PersistentRepr}
@@ -33,11 +37,19 @@ import scala.collection.immutable._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
-class JdbcAsyncWriteJournal(config: Config) extends AsyncWriteJournal {
+object JdbcAsyncWriteJournal {
+  case object Init
+  case class InitDone(highestOrdering: Long)
+  case class SetHighestOrdering(highestOrdering: Long)
+}
+
+class JdbcAsyncWriteJournal(config: Config) extends AsyncWriteJournal with Stash {
   implicit val ec: ExecutionContext = context.dispatcher
   implicit val system: ActorSystem = context.system
   implicit val mat: Materializer = ActorMaterializer()
   val journalConfig = new JournalConfig(config)
+  val orderingActor: ActorRef = system.actorOf(OrderingActor.props())
+  val orderingService: OrderingService = OrderingService(orderingActor)(ec, journalConfig.pluginConfig.orderingTimeout)
 
   val db: Database = SlickDatabase.forConfig(config, journalConfig.slickConfiguration)
 
@@ -49,6 +61,7 @@ class JdbcAsyncWriteJournal(config: Config) extends AsyncWriteJournal {
       (classOf[JdbcProfile], profile),
       (classOf[JournalConfig], journalConfig),
       (classOf[Serialization], SerializationExtension(system)),
+      (classOf[OrderingService], orderingService),
       (classOf[ExecutionContext], ec),
       (classOf[Materializer], mat)
     )
@@ -58,10 +71,40 @@ class JdbcAsyncWriteJournal(config: Config) extends AsyncWriteJournal {
     }
   }
 
-  override def asyncWriteMessages(messages: Seq[AtomicWrite]): Future[Seq[Try[Unit]]] =
+  override def preStart(): Unit = {
+    context.become(initializing)
+    self ! JdbcAsyncWriteJournal.Init
+  }
+
+  def initialize(): Future[JdbcAsyncWriteJournal.InitDone] = for {
+    highestOrdering <- journalDao.highestOrdering()
+    _ <- orderingService.initialize(highestOrdering)
+  } yield JdbcAsyncWriteJournal.InitDone(highestOrdering)
+
+  def initializing: Receive = {
+    case JdbcAsyncWriteJournal.Init =>
+      initialize().pipeTo(self)
+    case akka.actor.Status.Failure(t) =>
+      throw t
+    case JdbcAsyncWriteJournal.InitDone(highestOrdering) =>
+      context.become(super.receive)
+      unstashAll()
+    case msg =>
+      stash()
+  }
+
+  override def receivePluginInternal: Receive = LoggingReceive {
+    case SetHighestOrdering(highestOrdering) =>
+      orderingService.initialize(highestOrdering).pipeTo(sender())
+  }
+
+  override def asyncWriteMessages(messages: Seq[AtomicWrite]): Future[Seq[Try[Unit]]] = {
+    // get highest sequence nr for initialization
+    // enrich messages with highest sequence nr
     Source(messages)
       .via(journalDao.writeFlow)
       .runFold(List.empty[Try[Unit]])(_ :+ _)
+  }
 
   override def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long): Future[Unit] =
     journalDao.delete(persistenceId, toSequenceNr)

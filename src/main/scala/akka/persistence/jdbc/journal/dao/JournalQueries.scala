@@ -26,6 +26,9 @@ class JournalQueries(val profile: JdbcProfile, override val journalTableCfg: Jou
 
   private val JournalTableC = Compiled(JournalTable)
 
+  def highestOrdering: Rep[Option[Long]] =
+    JournalTable.map(_.ordering).max
+
   def writeJournalRows(xs: Seq[JournalRow]) =
     JournalTableC ++= xs.sortBy(_.sequenceNumber)
 

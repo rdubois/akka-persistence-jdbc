@@ -18,8 +18,8 @@ package akka.persistence.jdbc.query
 
 import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.event.LoggingReceive
-import akka.persistence.PersistentActor
-import akka.persistence.jdbc.TestSpec
+import akka.persistence.{Persistence, PersistentActor}
+import akka.persistence.jdbc.{TestSpec, journal}
 import akka.persistence.jdbc.query.javadsl.{JdbcReadJournal => JavaJdbcReadJournal}
 import akka.persistence.jdbc.query.scaladsl.JdbcReadJournal
 import akka.persistence.journal.Tagged
@@ -30,6 +30,7 @@ import akka.stream.testkit.TestSubscriber
 import akka.stream.testkit.javadsl.{TestSink => JavaSink}
 import akka.stream.testkit.scaladsl.TestSink
 import slick.jdbc.PostgresProfile.api._
+import akka.pattern.ask
 
 import scala.concurrent.duration.{FiniteDuration, _}
 import scala.concurrent.{ExecutionContext, Future}
@@ -52,6 +53,7 @@ trait ScalaJdbcReadJournalOperations extends ReadJournalOperations {
   implicit def ec: ExecutionContext
 
   lazy val readJournal: JdbcReadJournal = PersistenceQuery(system).readJournalFor[JdbcReadJournal](JdbcReadJournal.Identifier)
+  lazy val journalPlugin: ActorRef = Persistence(system).journalFor("jdbc-journal")
 
   def withCurrentPersistenceIds(within: FiniteDuration)(f: TestSubscriber.Probe[String] => Unit): Unit = {
     val tp = readJournal.currentPersistenceIds().runWith(TestSink.probe[String])
@@ -200,6 +202,8 @@ abstract class QueryTestSpec(config: String) extends TestSpec(config) with ReadJ
 trait PostgresCleaner extends QueryTestSpec {
   import akka.persistence.jdbc.util.Schema.Postgres
 
+  def journalPlugin: ActorRef
+
   val actionsClearPostgres = (for {
     _ <- sqlu"""TRUNCATE journal"""
     _ <- sqlu"""TRUNCATE snapshot"""
@@ -210,22 +214,27 @@ trait PostgresCleaner extends QueryTestSpec {
 
   override def beforeAll() = {
     dropCreate(Postgres())
+    (journalPlugin ? journal.JdbcAsyncWriteJournal.SetHighestOrdering(0L)).toTry should be a 'success
     super.beforeAll()
   }
 
   override def beforeEach(): Unit = {
     dropCreate(Postgres())
+    (journalPlugin ? journal.JdbcAsyncWriteJournal.SetHighestOrdering(0L)).toTry should be a 'success
     super.beforeEach()
   }
 
   override def afterAll(): Unit = {
     clearPostgres()
+    (journalPlugin ? journal.JdbcAsyncWriteJournal.SetHighestOrdering(0L)).toTry should be a 'success
     super.afterAll()
   }
 }
 
 trait MysqlCleaner extends QueryTestSpec {
   import akka.persistence.jdbc.util.Schema.MySQL
+
+  def journalPlugin: ActorRef
 
   val actionsClearMySQL = (for {
     _ <- sqlu"""TRUNCATE journal"""
@@ -235,18 +244,21 @@ trait MysqlCleaner extends QueryTestSpec {
   def clearMySQL(): Unit =
     withDatabase(_.run(actionsClearMySQL).toTry) should be a 'success
 
-  override def beforeAll() = {
+  override def beforeAll(): Unit = {
     dropCreate(MySQL())
+    (journalPlugin ? journal.JdbcAsyncWriteJournal.SetHighestOrdering(0L)).toTry should be a 'success
     super.beforeAll()
   }
 
   override def beforeEach(): Unit = {
     clearMySQL()
+    (journalPlugin ? journal.JdbcAsyncWriteJournal.SetHighestOrdering(0L)).toTry should be a 'success
     super.beforeEach()
   }
 
   override def afterAll(): Unit = {
     clearMySQL()
+    (journalPlugin ? journal.JdbcAsyncWriteJournal.SetHighestOrdering(0L)).toTry should be a 'success
     super.afterAll()
   }
 }
@@ -254,10 +266,12 @@ trait MysqlCleaner extends QueryTestSpec {
 trait OracleCleaner extends QueryTestSpec {
   import akka.persistence.jdbc.util.Schema.Oracle
 
+  def journalPlugin: ActorRef
+
   val actionsClearOracle = (for {
     _ <- sqlu"""DELETE FROM "journal""""
     _ <- sqlu"""DELETE FROM "snapshot""""
-    _ <- sqlu"""BEGIN "reset_sequence"; END; """
+    //    _ <- sqlu"""BEGIN "reset_sequence"; END; """
   } yield ()).transactionally
 
   def clearOracle(): Unit =
@@ -265,22 +279,27 @@ trait OracleCleaner extends QueryTestSpec {
 
   override def beforeAll() = {
     dropCreate(Oracle())
+    (journalPlugin ? journal.JdbcAsyncWriteJournal.SetHighestOrdering(0L)).toTry should be a 'success
     super.beforeAll()
   }
 
   override def afterAll(): Unit = {
     dropOracle()
+    (journalPlugin ? journal.JdbcAsyncWriteJournal.SetHighestOrdering(0L)).toTry should be a 'success
     super.afterAll()
   }
 
   override def beforeEach(): Unit = {
     clearOracle()
+    (journalPlugin ? journal.JdbcAsyncWriteJournal.SetHighestOrdering(0L)).toTry should be a 'success
     super.beforeEach()
   }
 }
 
 trait H2Cleaner extends QueryTestSpec {
   import akka.persistence.jdbc.util.Schema.H2
+
+  def journalPlugin: ActorRef
 
   val actionsClearH2 = (for {
     _ <- sqlu"""TRUNCATE TABLE journal"""
@@ -292,16 +311,19 @@ trait H2Cleaner extends QueryTestSpec {
 
   override def beforeAll() = {
     dropCreate(H2())
+    (journalPlugin ? journal.JdbcAsyncWriteJournal.SetHighestOrdering(0L)).toTry should be a 'success
     super.beforeAll()
   }
 
   override def afterAll(): Unit = {
     clearH2()
+    (journalPlugin ? journal.JdbcAsyncWriteJournal.SetHighestOrdering(0L)).toTry should be a 'success
     super.afterAll()
   }
 
   override def beforeEach(): Unit = {
     dropCreate(H2())
+    (journalPlugin ? journal.JdbcAsyncWriteJournal.SetHighestOrdering(0L)).toTry should be a 'success
     super.beforeEach()
   }
 }
