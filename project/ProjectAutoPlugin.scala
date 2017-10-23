@@ -8,7 +8,7 @@ import sbt._
 import scalariform.formatter.preferences.FormattingPreferences
 
 object ProjectAutoPlugin extends AutoPlugin {
-  final val AkkaVersion = "2.5.4"
+  final val AkkaVersion = "2.5.4-talend"
   final val SlickVersion = "3.2.1"
   final val ScalaTestVersion = "3.0.3"
 
@@ -36,7 +36,7 @@ object ProjectAutoPlugin extends AutoPlugin {
 
     licenses += ("Apache-2.0", url("http://opensource.org/licenses/apache2.0.php")),
 
-    scalaVersion := "2.12.3",
+    scalaVersion := "2.11.11",
 
     crossScalaVersions := Seq("2.11.11", "2.12.3"),
 
@@ -89,6 +89,6 @@ object ProjectAutoPlugin extends AutoPlugin {
    libraryDependencies += "com.typesafe.akka" %% "akka-persistence-tck" % AkkaVersion % Test,
    libraryDependencies += "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
    libraryDependencies += "com.typesafe.akka" %% "akka-testkit" % AkkaVersion % Test,
-   libraryDependencies += "org.scalatest" %% "scalatest" % ScalaTestVersion % Test   
+   libraryDependencies += "org.scalatest" %% "scalatest" % ScalaTestVersion % Test
  )
 }
