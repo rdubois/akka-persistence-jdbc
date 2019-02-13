@@ -73,7 +73,12 @@ class JdbcReadJournal(config: Config, configPath: String)(implicit val system: E
     sys.addShutdownHook(db.close())
 
   private val writePluginId = config.getString("write-plugin")
-  private val eventAdapters = Persistence(system).adaptersFor(writePluginId)
+
+  // FIXME: temporary fix that prevents to use event adapters when streaming the journal.
+  // This change is acceptable at the time of writing because we don't need event adapters, and then we always use the IdentityEventAdapters.
+  // This change is required because the ReadJournal implementations are not compatible with 'https://github.com/akka/akka/issues/23618', regarding the event adapters lookup.
+  // private val eventAdapters = Persistence(system).adaptersFor(writePluginId)
+  private val eventAdapters = akka.persistence.journal.EventAdapters(system, com.typesafe.config.ConfigFactory.empty())
 
   val readJournalDao: ReadJournalDao = {
     val fqcn = readJournalConfig.pluginConfig.dao
