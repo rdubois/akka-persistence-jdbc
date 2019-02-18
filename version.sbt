@@ -1,1 +1,1 @@
-version := "3.3.1-talend"
+version := "3.3.2-talend"
