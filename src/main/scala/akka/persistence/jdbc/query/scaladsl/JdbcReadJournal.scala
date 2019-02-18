@@ -57,7 +57,7 @@ object JdbcReadJournal {
   private case object Stop extends FlowControl
 }
 
-class JdbcReadJournal(config: Config, configPath: String)(implicit val system: ExtendedActorSystem) extends ReadJournal
+class JdbcReadJournal(pluginConfig: Config, configPath: String, fullConfig: Config)(implicit val system: ExtendedActorSystem) extends ReadJournal
   with CurrentPersistenceIdsQuery
   with PersistenceIdsQuery
   with CurrentEventsByPersistenceIdQuery
@@ -67,19 +67,16 @@ class JdbcReadJournal(config: Config, configPath: String)(implicit val system: E
 
   implicit val ec: ExecutionContext = system.dispatcher
   implicit val mat: Materializer = ActorMaterializer()
-  val readJournalConfig = new ReadJournalConfig(config)
+  val readJournalConfig = new ReadJournalConfig(pluginConfig)
 
-  private val writePluginId = config.getString("write-plugin")
-
-  // FIXME: temporary fix that prevents to use event adapters when streaming the journal.
-  // This change is acceptable at the time of writing because we don't need event adapters, and then we always use the IdentityEventAdapters.
-  // This change is required because the ReadJournal implementations are not compatible with 'https://github.com/akka/akka/issues/23618', regarding the event adapters lookup.
-  // private val eventAdapters = Persistence(system).adaptersFor(writePluginId)
-  private val eventAdapters = akka.persistence.journal.EventAdapters(system, com.typesafe.config.ConfigFactory.empty())
+  private val writePluginId = pluginConfig.getString("write-plugin")
+  // If 'fullConfig' is empty, then the write plugin will be resolved from the ActorSystem configuration.
+  // Else, it will be resolved from the provided 'fullConfig'.
+  private val eventAdapters = Persistence(system).adaptersFor(writePluginId, fullConfig)
 
   val readJournalDao: ReadJournalDao = {
     val slickExtension = SlickExtension(system)
-    val db = slickExtension.database(config)
+    val db = slickExtension.database(pluginConfig)
     if (readJournalConfig.addShutdownHook) {
       CoordinatedShutdown(system).addTask(readJournalConfig.coordinatedShutdownPhase, "close-jdbc-read-journal-db") { () =>
         Future {
@@ -89,7 +86,7 @@ class JdbcReadJournal(config: Config, configPath: String)(implicit val system: E
       }
     }
     val fqcn = readJournalConfig.pluginConfig.dao
-    val profile: JdbcProfile = slickExtension.profile(config)
+    val profile: JdbcProfile = slickExtension.profile(pluginConfig)
     val args = Seq(
       (classOf[Database], db),
       (classOf[JdbcProfile], profile),

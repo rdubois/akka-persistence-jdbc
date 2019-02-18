@@ -18,10 +18,31 @@ package akka.persistence.jdbc.query
 
 import akka.actor.ExtendedActorSystem
 import akka.persistence.query.ReadJournalProvider
-import com.typesafe.config.Config
+import com.typesafe.config.{ Config, ConfigFactory }
 
-class JdbcReadJournalProvider(system: ExtendedActorSystem, config: Config, configPath: String) extends ReadJournalProvider {
-  override val scaladslReadJournal = new scaladsl.JdbcReadJournal(config, configPath)(system)
+/**
+ * [[ReadJournalProvider]] implementation for JDBC extension.
+ * Refer to [[akka.persistence.query.PersistenceQuery]] to see how all parameters are provided while creating
+ * the plugin.
+ *
+ * @param system       the [[ExtendedActorSystem]] as expected by an extension
+ * @param pluginConfig the partial [[Config]] including only the properties expected
+ *                     by [[akka.persistence.jdbc.query.scaladsl.JdbcReadJournal]]
+ * @param configPath   the above 'pluginConfig' path within the full [[Config]]
+ * @param fullConfig   the full [[Config]] that could have been provided at runtime.
+ *                     Its purpose is to configure other extensions (such as the 'write-plugin') by relying on this
+ *                     provided [[Config]] instead of the ActorSystem configuration.
+ */
+class JdbcReadJournalProvider(
+    system: ExtendedActorSystem, pluginConfig: Config, configPath: String, fullConfig: Config) extends ReadJournalProvider {
 
-  override val javadslReadJournal = new javadsl.JdbcReadJournal(scaladslReadJournal)
+  /**
+   * Legacy constructor to be compliant with Akka versions prior to 2.5.21-talend.
+   */
+  def this(system: ExtendedActorSystem, pluginConfig: Config, configPath: String) =
+    this(system, pluginConfig, configPath, ConfigFactory.empty)
+
+  override def scaladslReadJournal() = new scaladsl.JdbcReadJournal(pluginConfig, configPath, fullConfig)(system)
+
+  override def javadslReadJournal() = new javadsl.JdbcReadJournal(scaladslReadJournal)
 }
